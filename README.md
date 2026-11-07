@@ -1,36 +1,147 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# КЛИН — барбершоп в Екатеринбурге
 
-## Getting Started
+Полноценный сайт барбершопа: брендовый лендинг, онлайн-запись с календарём,
+защищённая админ-панель и Telegram-бот для записи клиентов и уведомлений
+команды.
 
-First, run the development server:
+Проект использует вымышленный бренд **КЛИН / KLIN Barber Club** и демо-данные:
+4 барбера, 6 услуг, 12 записей. Адрес: Екатеринбург, Малышева, 44.
+
+## Стек
+
+- Next.js 16 (App Router, Turbopack), React 19, TypeScript
+- Tailwind CSS 4
+- Prisma 6 + SQLite
+- grammY для Telegram-бота
+- zod, date-fns, lucide-react
+
+## Быстрый старт
 
 ```bash
+npm install
+cp .env.example .env
+npm run db:push
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Откройте:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Сайт: http://localhost:3000
+- Онлайн-запись: http://localhost:3000/booking
+- Админка: http://localhost:3000/admin
+- Telegram-бот: запускается отдельным процессом, см. ниже
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+В текущей локальной сборке пароль администратора — `klin-admin`. Перед
+публикацией обязательно замените `ADMIN_PASSWORD` и `ADMIN_SESSION_SECRET`.
 
-## Learn More
+## Переменные окружения
 
-To learn more about Next.js, take a look at the following resources:
+| Переменная | Назначение |
+| --- | --- |
+| `DATABASE_URL` | SQLite-подключение, по умолчанию `file:./dev.db` |
+| `SHOP_TIMEZONE` | Часовой пояс барбершопа, например `Europe/Moscow` |
+| `ADMIN_PASSWORD` | Пароль входа в админ-панель |
+| `ADMIN_SESSION_SECRET` | Секрет для подписи cookie-сессии |
+| `TELEGRAM_BOT_TOKEN` | Токен бота от @BotFather |
+| `TELEGRAM_GROUP_CHAT_ID` | ID группы для уведомлений о новых записях |
+| `TELEGRAM_WEBHOOK_SECRET` | Секрет проверки Telegram webhook |
+| `NEXT_PUBLIC_SITE_URL` | Публичный адрес сайта |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Telegram-интеграция необязательна: без токена и ID группы сайт и админка
+продолжают работать, а уведомления просто пропускаются.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Команды
 
-## Deploy on Vercel
+```bash
+npm run dev          # разработка
+npm run build        # production-сборка
+npm run start        # запуск собранного приложения
+npm run lint         # ESLint
+npm run db:push      # применить схему Prisma
+npm run db:seed      # заполнить демо-данными
+npm run db:reset     # сбросить базу и заново загрузить демо-данные
+npm run bot          # Telegram-бот в режиме long polling
+npm run bot:webhook  # установить webhook
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Установка webhook:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run bot:webhook https://your-domain.com
+```
+
+Для локальной разработки удобнее polling:
+
+```bash
+npm run bot
+```
+
+Не запускайте одновременно polling и webhook для одного бота.
+
+## Возможности
+
+### Сайт
+
+- Лендинг с услугами, барберами, отзывами, контактами и картой
+- Онлайн-запись: услуга, барбер, месяц, свободное время, контакты
+- Проверка занятости слота на сервере и защита от двойной записи
+- Адаптивная вёрстка и брендовая типографика
+
+### Админ-панель
+
+- Вход по паролю, httpOnly cookie-сессия на 7 дней
+- Дашборд с показателями дня и ближайшими записями
+- Журнал записей с фильтрами по периоду и статусу
+- Подтверждение, завершение и отмена записей
+- Список барберов с текущей загрузкой
+- Создание и редактирование барберов, фото, цвета и недельного расписания
+- Настройки Telegram: статус бота, группы, webhook и тестовое сообщение
+
+### Telegram-бот
+
+- `/start` — главное меню
+- `/book` — запись по шагам: услуга, барбер, дата, время, имя, телефон
+- `/my` — предстоящие записи клиента
+- `/cancel` — выход из текущего диалога
+- Уведомление в группу барбершопа о каждой новой записи с сайта или из бота
+
+## Логика записи
+
+- Рабочие дни хранятся как ISO-дни недели `1..7` (понедельник — воскресенье).
+- Интервалы формируются с шагом 30 минут с учётом длительности услуги.
+- Учитываются рабочие часы, перерывы и уже существующие записи.
+- Отменённые записи не блокируют время.
+- Дата хранится как `YYYY-MM-DD`, время — как `HH:mm`.
+- Статусы: `CONFIRMED`, `DONE`, `CANCELLED`.
+- Источники: `WEBSITE`, `TELEGRAM`.
+
+## Структура
+
+```text
+prisma/
+  schema.prisma       # модели и SQLite
+  seed.ts             # демо-барберы, услуги и записи
+scripts/
+  bot.ts              # long polling
+  set-webhook.ts      # установка webhook
+src/app/
+  (site)/             # лендинг и запись
+  admin/              # вход и защищённая панель
+  api/                # booking, availability, admin, telegram webhook
+src/components/       # сайт, запись, админка
+src/lib/
+  booking.ts          # расчёт слотов и создание записи
+  data.ts             # выборки для сайта и админки
+  auth.ts             # сессия администратора
+  telegram-bot.ts     # сценарий Telegram-бота
+  telegram.ts         # уведомления в группу
+```
+
+## Перед публикацией
+
+1. Замените `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` и токен бота.
+2. Укажите реальный `NEXT_PUBLIC_SITE_URL`.
+3. Настройте `TELEGRAM_GROUP_CHAT_ID` и проверьте тестовое сообщение в админке.
+4. Установите webhook и не запускайте polling одновременно.
+5. Для production используйте постоянную базу и резервное копирование SQLite.

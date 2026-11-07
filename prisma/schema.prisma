@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Barber {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  role         String
+  bio          String
+  photo        String
+  accent       String        @default("#ff5c35")
+  experience   Int           @default(0)
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  workingDays  WorkingDay[]
+  appointments Appointment[]
+}
+
+model WorkingDay {
+  id         String  @id @default(cuid())
+  barberId   String
+  weekday    Int
+  isWorking  Boolean @default(true)
+  startTime  String  @default("10:00")
+  endTime    String  @default("21:00")
+  breakStart String?
+  breakEnd   String?
+  barber     Barber  @relation(fields: [barberId], references: [id], onDelete: Cascade)
+
+  @@unique([barberId, weekday])
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  name         String
+  description  String
+  duration     Int
+  price        Int
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  appointments Appointment[]
+}
+
+model Appointment {
+  id               String   @id @default(cuid())
+  barberId         String
+  serviceId        String
+  clientName       String
+  clientPhone      String
+  date             String
+  startTime        String
+  endTime          String
+  status           String   @default("CONFIRMED")
+  source           String   @default("WEBSITE")
+  notes            String?
+  telegramId       String?
+  telegramUsername String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  barber           Barber   @relation(fields: [barberId], references: [id])
+  service          Service  @relation(fields: [serviceId], references: [id])
+
+  @@unique([barberId, date, startTime])
+  @@index([date])
+  @@index([telegramId])
+}
+
+model TelegramSession {
+  chatId    String   @id
+  step      String   @default("idle")
+  data      String   @default("{}")
+  updatedAt DateTime @updatedAt
+}
